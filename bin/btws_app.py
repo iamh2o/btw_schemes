@@ -16,7 +16,7 @@ def setup_logging():
     logger.setLevel(logging.INFO)
 
     # Define the log file name with a timestamp
-    log_filename = f"logs/snappy_v2_{get_clean_timestamp()}.log"
+    log_filename = f"logs/btw_schemes_{get_clean_timestamp()}.log"
 
     # Stream handler (to console)
     c_handler = logging.StreamHandler()
