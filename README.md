@@ -15,3 +15,5 @@ conda env create -f btw_env.yaml
 conda activate BTWS
 ```
 
+# The thing works, using a in memory dict as a DB... but... damn!
+

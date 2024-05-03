@@ -1,7 +1,7 @@
 import os
 import sys
 
-# Set up nice logging
+# Set up logging
 import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime, timedelta
@@ -11,36 +11,21 @@ def get_clean_timestamp():
     return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 def setup_logging():
-    # Configuring the root logger instead of 'uvicorn' to capture logs from all libraries
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-
-    # Define the log file name with a timestamp
     log_filename = f"logs/btw_schemes_{get_clean_timestamp()}.log"
-
-    # Stream handler (to console)
     c_handler = logging.StreamHandler()
-    c_handler.setLevel(logging.INFO)  # Set this as needed
-
-    # File handler (to file, with rotation)
+    c_handler.setLevel(logging.INFO)
     f_handler = RotatingFileHandler(log_filename, maxBytes=10485760, backupCount=5)
-    f_handler.setLevel(logging.INFO)  # Set this as needed
-
-    # Common log format
+    f_handler.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     c_handler.setFormatter(formatter)
     f_handler.setFormatter(formatter)
-
-    # Add handlers to the logger
     logger.addHandler(c_handler)
     logger.addHandler(f_handler)
 
 setup_logging()
 
-
-# The following three lines of code allow for dropping an 'embed()'
-# into a page rendering method and returning an interactive
-# shell when the embed is hit. Exit with ctl-D
 from IPython import embed
 import nest_asyncio
 nest_asyncio.apply()
@@ -48,16 +33,12 @@ nest_asyncio.apply()
 import discord
 from discord.ext import commands
 
-# Define the intents
-intents = discord.Intents.default()  # Defaults enable only the message content intent
+intents = discord.Intents.default()
 intents.messages = True
-intents.message_content = True  # Make sure this is enabled
-intents.members = True  # Enable the member intent to access member data if needed
+intents.message_content = True
+intents.members = True
 
-# Initialize the bot with a command prefix and the defined intents
 bot = commands.Bot(command_prefix='!', intents=intents)
-
-# In-memory data structure to store events
 events = {}
 
 @bot.event
@@ -66,33 +47,115 @@ async def on_ready():
 
 @bot.command()
 async def create_event(ctx, event_id: str, *, description: str):
-    """Create a new camping event with a unique ID and description."""
     if event_id in events:
         await ctx.send(f"Event ID `{event_id}` already exists.")
     else:
-        events[event_id] = {'description': description, 'attendees': []}
+        events[event_id] = {'description': description, 'requests': []}
         await ctx.send(f"Event `{event_id}` created successfully!")
 
-@bot.command()
-async def list_events(ctx):
-    """List all camping events."""
+@bot.command(name="list_invite_reqs")
+async def list_invite_reqs(ctx):
     if events:
         for event_id, info in events.items():
-            
-            await ctx.send(f"**{event_id}**: {info['description']} Attendees: {len(info['attendees'])} .. {info['attendees']}")
+            response = f"**{event_id}** - {info['description']}\n"
+            for request in info['requests']:
+                response += f"    - {request['user'].name}: Email {request['email']}, Cell {request['cell']}, Color {request['color']}, Status: {request['status']}\n"
+            await ctx.send(response)
     else:
         await ctx.send("No events have been created yet.")
-@bot.command()
-async def attend(ctx, event_id: str):
-    """Request to attend a camping event by its ID."""
-    if event_id in events:
-        if ctx.author not in events[event_id]['attendees']:
-            events[event_id]['attendees'].append(ctx.author)
-            await ctx.send(f"You have been added to the attendees list for event `{event_id}`.")
-        else:
-            await ctx.send("You are already on the attendees list for this event.")
-    else:
+
+@bot.command(name="request_invitation")
+async def request_invitation(ctx, event_id: str):
+    if event_id not in events:
         await ctx.send(f"No event found with ID `{event_id}`.")
+        return
+
+    # Ask for additional info
+    def check(m):
+        return m.author == ctx.author and m.channel == ctx.channel
+
+    try:
+        await ctx.send("Please enter your contact email:")
+        email_msg = await bot.wait_for('message', timeout=60.0, check=check)
+        email = email_msg.content
+
+        await ctx.send("Please enter your contact cell number:")
+        cell_msg = await bot.wait_for('message', timeout=60.0, check=check)
+        cell = cell_msg.content
+
+        await ctx.send("Please enter your favorite color:")
+        color_msg = await bot.wait_for('message', timeout=60.0, check=check)
+        color = color_msg.content
+
+    except asyncio.TimeoutError:
+        await ctx.send("You did not respond in time!")
+        return
+
+    # Save the request
+    request = {
+        'user': ctx.author,
+        'email': email,
+        'cell': cell,
+        'color': color,
+        'status': 'Pending'
+    }
+    events[event_id]['requests'].append(request)
+    await ctx.send(f"Your invitation request has been submitted for event `{event_id}`.")
+
+
+@bot.command(name="alter_invitation_status")
+async def alter_invitation_status(ctx, event_id: str, user_id: int, new_status: str):
+    if event_id not in events:
+        await ctx.send(f"No event found with ID `{event_id}`.")
+        return
+    if new_status not in ['Pending', 'Invited', 'Attending', 'Waitlist', 'Revoked']:
+        await ctx.send("Invalid status. Valid statuses are: Pending, Invited, Attending, Waitlist, Revoked.")
+        return
+
+    for request in events[event_id]['requests']:
+        if request['user'].id == user_id:
+            old_status = request['status']
+            request['status'] = new_status
+            user = request['user']
+            try:
+                await user.send(f"Your invitation status for the event `{event_id}` - `{events[event_id]['description']}` has been changed from `{old_status}` to `{new_status}`.")
+                await ctx.send(f"Updated status for {user.name} to `{new_status}`.")
+            except discord.errors.Forbidden:
+                await ctx.send("Error: Unable to send DM to the user. They might have DMs disabled.")
+            return
+
+    await ctx.send(f"No request found for user with ID `{user_id}` in event `{event_id}`.")
+
+
+@bot.command(name="list_events")
+async def list_events(ctx):
+    if events:
+        for event_id, info in events.items():
+            status_count = {status: 0 for status in ['Pending', 'Invited', 'Attending', 'Waitlist', 'Revoked']}
+            for request in info['requests']:
+                if request['status'] in status_count:
+                    status_count[request['status']] += 1
+            status_details = ', '.join([f"{status}: {count}" for status, count in status_count.items()])
+            await ctx.send(f"**{event_id}** - {info['description']} - {status_details}")
+    else:
+        await ctx.send("No events have been created yet.")
+        
+
+@bot.command(name="list_event_invites")
+async def list_event_invites(ctx):
+    if not events:
+        await ctx.send("No events have been created yet.")
+        return
+
+    for event_id, info in events.items():
+        response = f"**Event ID: {event_id} - {info['description']}**\n"
+        if not info['requests']:
+            response += "    No invite requests yet.\n"
+        else:
+            for request in info['requests']:
+                response += f"    - Username: {request['user'].name}, UserID: {request['user'].id}, Status: {request['status']}\n"
+        await ctx.send(response)
+
 
 # Replace 'your_bot_token' with your actual Discord bot token
-bot.run(sys.argv[1])  # This should be your bot's token
+bot.run(sys.argv[1])
