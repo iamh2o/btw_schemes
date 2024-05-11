@@ -23,6 +23,7 @@ dependencies:
   - pip:
     - black
     - uvicorn==0.28.0
+    - pymupdf
     - fastapi==0.110.0
     - supabase==2.3.4
     - python-dotenv==1.0.0
