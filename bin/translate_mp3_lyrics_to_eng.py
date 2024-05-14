@@ -79,7 +79,7 @@ def main(audio_file, language_code, output_dir, save_temp):
     if audio_file_type == "wav" and save_temp.upper() == "Y":
         temp_dir = os.path.join(os.path.dirname(mp3_file), 'tempfiles')
         os.makedirs(temp_dir, exist_ok=True)
-        shutil.copy(mp3_file, temp_dir)
+        shutil.copy(mp3_file, output_dir)
         logger.info(f"Temporary MP3 file saved to: {temp_dir}")
         os.remove(mp3_file)  # Clean up the temporary mp3 file if originally a wav file
 
