@@ -18,6 +18,7 @@ ffmpeg -version
 
 ```
 
+
 ### See ChatGPT Transcript For Install Deets
 * These are the notes from writing this script: [HERE](https://chat.openai.com/share/171984a3-7734-4fc6-80fa-1aa673c8f454)
 #### Setup google api credentials
