@@ -33,4 +33,9 @@ dependencies:
     - python-multipart==0.0.9
     - nest_asyncio==1.6.0
     - discord.py
+    - pydub
+    - speechrecognition
+    - googletrans==4.0.0-rcl
+    - google-cloud-speech
+    - google-cloud-translate
 prefix: /Users/daylily/miniconda/envs/BTWS
